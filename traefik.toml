@@ -1,0 +1,67 @@
+version: "3"
+
+ networks:
+  zshmeta:
+    external: true
+  internal:
+    external: false
+
+ services:
+  db:
+    image: postgres:9.6
+    restart: always
+    environment:
+      - POSTGRES_USER=gitea
+      - POSTGRES_PASSWORD=gitea
+      - POSTGRES_DB=gitea
+    labels:
+      - "traefik.enable=false"
+    networks:
+      - internal
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+ traefik:
+    image: traefik:latest
+    command: --docker
+    ports:
+      - 80:80
+      - 443:443
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=dashboard"
+      - "traefik.frontend.rule=Host:traefik.zshmeta.dev"
+      - "traefik.port=8080"
+    networks:
+      - zshmeta
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.toml:/traefik.toml
+      - ./acme.json:/acme.json
+    container_name: traefik
+    restart: always
+
+ server:
+    image: gitea/gitea:latest
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+    restart: always
+    networks:
+      - internal
+    volumes:
+      - ./gitea:/data
+    ports:
+      - "3000"
+      - "22"
+    labels:
+      - "traefik.enabled=true"
+      - "traefik.backend=gitea"
+      - "traefik.frontend.rule=Host:git.zshmeta.dev"
+      - "traefik.docker.network=zshmeta"
+      - "traefik.port=3000"
+    networks:
+      - internal
+      - zshmeta
+    depends_on:
+      - db
+      - traefik
